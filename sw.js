@@ -1,10 +1,19 @@
-const CACHE = 'hoy-v1';
+const CACHE = 'hoy-v2';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
-  './app.js',
   './manifest.webmanifest',
+  './js/main.js',
+  './js/util.js',
+  './js/data.js',
+  './js/calc.js',
+  './js/ui.js',
+  './js/hoy.js',
+  './js/gym.js',
+  './js/gastos.js',
+  './js/notas.js',
+  './js/ajustes.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -27,16 +36,15 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
-      if (hit) { net.catch(() => {}); return hit; }
-      return net.catch(() => caches.match('./index.html'));
-    })
+    caches.open(CACHE).then((cache) =>
+      cache.match(req, { ignoreSearch: true }).then((hit) => {
+        const net = fetch(req).then((res) => {
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        });
+        if (hit) { net.catch(() => {}); return hit; }
+        return net.catch(() => cache.match('./index.html'));
+      })
+    )
   );
 });
