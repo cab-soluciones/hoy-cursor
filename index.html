@@ -5,9 +5,8 @@
   <title>Hoy</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Hoy: rutina diaria, gimnasio, tareas, gastos y notas en un solo sitio.">
-  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hoy">
@@ -19,9 +18,16 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="flameOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#0b6fb0"/><stop offset=".5" stop-color="#38c7ff"/><stop offset="1" stop-color="#d9f6ff"/></linearGradient>
+      <linearGradient id="flameIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#7be3ff"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+    </defs>
+  </svg>
   <main id="app">
     <section class="view" id="view-hoy" aria-label="Hoy"></section>
     <section class="view" id="view-gym" aria-label="Gym" hidden></section>
+    <section class="view" id="view-actividad" aria-label="Actividad" hidden></section>
     <section class="view" id="view-gastos" aria-label="Gastos" hidden></section>
     <section class="view" id="view-notas" aria-label="Notas" hidden></section>
     <section class="view" id="view-ajustes" aria-label="Ajustes" hidden></section>
@@ -46,6 +52,7 @@
   <nav class="tabbar" id="tabbar" aria-label="Secciones">
     <button type="button" class="tab active" data-tab="hoy"><span class="ico" data-icon="sun"></span><span>Hoy</span></button>
     <button type="button" class="tab" data-tab="gym"><span class="ico" data-icon="dumbbell"></span><span>Gym</span></button>
+    <button type="button" class="tab" data-tab="actividad"><span class="ico" data-icon="walk"></span><span>Actividad</span></button>
     <button type="button" class="tab" data-tab="gastos"><span class="ico" data-icon="wallet"></span><span>Gastos</span></button>
     <button type="button" class="tab" data-tab="notas"><span class="ico" data-icon="note"></span><span>Notas</span></button>
     <button type="button" class="tab" data-tab="ajustes"><span class="ico" data-icon="sliders"></span><span>Ajustes</span></button>

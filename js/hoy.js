@@ -3,12 +3,14 @@ import {
 } from './util.js';
 import {
   getState, save, WEEKDAY_LETTERS, WEEKDAY_ORDER, WEEKDAY_NAMES, EMOJIS, HABIT_PRESETS, HABIT_PACK,
-  addHabitFromPreset, isHabitDone, habitCount, isScheduled
+  addHabitFromPreset
 } from './data.js';
+import { isHabitDone, habitCount, isScheduled } from './habits.js';
 import { habitStreak, sessionVolume } from './calc.js';
 import {
-  icon, openSheet, field, findById, removeById, refresh, confetti, haptic, toast, sheetForm
+  icon, flame, openSheet, field, findById, removeById, refresh, confetti, haptic, toast, sheetForm
 } from './ui.js';
+import { todayCard } from './actividad.js';
 
 const root = () => document.getElementById('view-hoy');
 let prevPct = null;
@@ -96,7 +98,7 @@ function habitRow(h, active) {
   const streak = habitStreak(h, (hb, k) => isHabitDone(hb, k), isScheduled, new Date());
   const pct = Math.min(100, Math.round((c / h.target) * 100));
   const streakHtml = streak > 0
-    ? '<span class="streak">' + icon('flame', 14) + streak + (streak === 1 ? ' día' : ' días') + '</span>'
+    ? '<span class="streak">' + flame(16, streak >= 7 ? 'hot' : '') + streak + (streak === 1 ? ' día' : ' días') + '</span>'
     : '<span class="muted">Sin racha</span>';
   let meta = streakHtml;
   if (counter) meta = '<span class="count-txt">' + c + '/' + h.target + (h.unit ? ' ' + esc(h.unit) : '') + '</span>' + streakHtml;
@@ -106,8 +108,8 @@ function habitRow(h, active) {
   if (active && counter) {
     control = '<div class="stepper"><button type="button" class="step" data-action="hoy:dec" data-id="' + esc(h.id) + '" aria-label="Quitar uno">' + icon('minus', 18) + '</button>' +
       '<button type="button" class="step plus' + (done ? ' full' : '') + '" data-action="hoy:inc" data-id="' + esc(h.id) + '" aria-label="Añadir uno">' + icon('plus', 18) + '</button></div>';
-  } else if (active && h.auto === 'gym') {
-    control = '<button type="button" class="check' + (done ? ' on' : '') + '" data-action="' + (done ? 'hoy:noop' : 'app:go') + '" data-tab="gym" data-id="' + esc(h.id) + '" aria-label="Se marca al entrenar">' + icon('check', 16) + '</button>';
+  } else if (active && (h.auto === 'gym' || h.auto === 'steps')) {
+    control = '<button type="button" class="check' + (done ? ' on' : '') + '" data-action="' + (done ? 'hoy:noop' : 'app:go') + '" data-tab="' + (h.auto === 'gym' ? 'gym' : 'actividad') + '" data-id="' + esc(h.id) + '" aria-label="Se marca solo">' + icon('check', 16) + '</button>';
   } else if (active) {
     control = '<button type="button" class="check' + (done ? ' on' : '') + '" data-action="hoy:toggle-habit" data-id="' + esc(h.id) + '" aria-label="Marcar ' + esc(h.name) + '" aria-pressed="' + done + '">' + icon('check', 16) + '</button>';
   }
@@ -115,7 +117,7 @@ function habitRow(h, active) {
   return '<div class="habit' + (active ? '' : ' rest') + (done && active ? ' is-done' : '') + '" data-hid="' + esc(h.id) + '">' +
     '<div class="h-emoji">' + esc(h.emoji) + '</div>' +
     '<div class="grow"><div class="h-name">' + esc(h.name) + '</div>' +
-    '<div class="h-meta">' + meta + (h.auto === 'gym' && active && !done ? '<span>Se marca al entrenar</span>' : '') + '</div>' +
+    '<div class="h-meta">' + meta + (h.auto && active && !done ? '<span>' + (h.auto === 'gym' ? 'Se marca al entrenar' : 'Se marca al llegar a tu meta') + '</span>' : '') + '</div>' +
     (counter && active ? '<div class="pbar"><span style="width:' + pct + '%"></span></div>' : '') +
     (active ? '<div class="dots">' + dotsHtml(h) + '</div>' : '') +
     '</div>' + control +
@@ -196,6 +198,7 @@ export function render() {
     '<circle class="bar" id="ring-bar" cx="42" cy="42" r="' + R + '" fill="none" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + C.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '"/></svg>' +
     '<div class="pct" id="ring-pct">' + (prevPct == null ? p.pct : prevPct) + '%</div></div></div>' +
     gymCard() +
+    '<div id="today-wrap">' + todayCard() + '</div>' +
     '<div class="card"><div class="card-head"><h3>Rutina diaria</h3><button type="button" class="link" data-action="hoy:new-habit">' + icon('plus', 16) + ' Nueva</button></div>' + routineHtml + '</div>' +
     '<div class="card"><h3>Tareas · ' + tasks.filter((t) => t.done).length + ' de ' + tasks.length + '</h3>' +
     '<form class="add-row" id="task-form" autocomplete="off">' +
@@ -260,7 +263,7 @@ function habitSheet(habit) {
       field('Unidad', 'h-unit', '<input type="text" id="h-unit" name="unit" maxlength="20" placeholder="vasos" value="' + esc(habit ? habit.unit : '') + '">') +
       '</div><p class="hint">1 vez = casilla. Más de 1 = contador (por ejemplo 10 vasos de agua).</p>' +
       '<div class="field"><label>Días (sin marcar = todos)</label><div class="chips">' + dayChips + '</div></div>' +
-      '<label class="switch"><input type="checkbox" name="auto"' + (habit && habit.auto === 'gym' ? ' checked' : '') + '><span>Marcar automáticamente al registrar un entreno</span></label>',
+      field('Marcado automático', 'h-auto', '<select id="h-auto" name="auto"><option value="">No, lo marco yo</option><option value="gym"' + (habit && habit.auto === 'gym' ? ' selected' : '') + '>Al registrar un entreno</option><option value="steps"' + (habit && habit.auto === 'steps' ? ' selected' : '') + '>Al llegar a mi meta de pasos</option></select>'),
     onSave: (f) => {
       const name = f.elements.name.value.trim();
       const emoji = f.elements.emoji.value.trim() || '✅';
@@ -269,7 +272,7 @@ function habitSheet(habit) {
       if (!isFinite(target) || target < 1) target = 1;
       target = Math.min(99, target);
       const weekdays = Array.prototype.map.call(f.querySelectorAll('input[name=day]:checked'), (i) => Number(i.value));
-      const auto = f.elements.auto.checked ? 'gym' : '';
+      const auto = f.elements.auto.value;
       const data = { name: name, emoji: emoji, target: auto ? 1 : target, unit: auto ? '' : f.elements.unit.value.trim(), weekdays: weekdays, auto: auto };
       if (habit) Object.assign(habit, data);
       else getState().habits.push(Object.assign({ id: uid(), days: [], counts: {} }, data));
@@ -362,7 +365,7 @@ export const actions = {
     f.elements.name.value = pr.name;
     f.elements.target.value = pr.target;
     f.elements.unit.value = pr.unit;
-    f.elements.auto.checked = pr.auto === 'gym';
+    f.elements.auto.value = pr.auto;
     Array.prototype.forEach.call(f.querySelectorAll('input[name=day]'), (i) => { i.checked = pr.weekdays.indexOf(Number(i.value)) >= 0; });
   }
 };
@@ -378,3 +381,11 @@ export const forms = {
     document.getElementById('task-input').focus();
   }
 };
+
+export function init() {
+  setInterval(() => {
+    const wrap = document.getElementById('today-wrap');
+    if (!wrap || document.hidden || document.getElementById('view-hoy').hidden) return;
+    wrap.innerHTML = todayCard();
+  }, 60000);
+}

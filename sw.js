@@ -1,4 +1,4 @@
-const CACHE = 'hoy-v2';
+const CACHE = 'hoy-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,9 @@ const ASSETS = [
   './js/gastos.js',
   './js/notas.js',
   './js/ajustes.js',
+  './js/actividad.js',
+  './js/habits.js',
+  './js/walk.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',

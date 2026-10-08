@@ -1,5 +1,5 @@
 import {
-  esc, uid, todayKey, dateKey, mondayOf, parseKey, parseNum, numStr, fmt, fmtDur, fmtMinutes, shortDate, clamp
+  esc, uid, todayKey, dateKey, addDays, mondayOf, parseKey, capitalize, parseNum, numStr, fmt, fmtDur, fmtMinutes, shortDate, clamp
 } from './util.js';
 import {
   getState, save, MUSCLE_GROUPS, WEEKDAY_ORDER, WEEKDAY_LETTERS, ACTIVITY_LEVELS, GOALS, TEMPLATES,
@@ -10,20 +10,21 @@ import {
   bestScore, bestSet, findPRs, setScore
 } from './calc.js';
 import {
-  icon, openSheet, closeSheet, field, sheetForm, findById, removeById, refresh, goTo, toast, haptic,
+  icon, flame, openSheet, closeSheet, field, sheetForm, findById, removeById, refresh, goTo, toast, haptic,
   unlockAudio, beep, lineChart, pointsFromDates
 } from './ui.js';
 
 const root = () => document.getElementById('view-gym');
 const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const SEGMENTS = [['entrenar', 'Entrenar'], ['rutinas', 'Rutinas'], ['cuerpo', 'Cuerpo'], ['calcular', 'Calcular']];
+const SEGMENTS = [['entrenar', 'Entrenar'], ['rutinas', 'Rutinas'], ['progreso', 'Progreso'], ['cuerpo', 'Cuerpo'], ['calcular', 'Calcular']];
 
 const ui = {
   seg: 'entrenar',
   openGroups: {},
   rm: { kg: '', reps: '' },
   plate: { target: '', bar: 20 },
-  rest: null
+  rest: null,
+  cal: { y: new Date().getFullYear(), m: new Date().getMonth(), sel: '' }
 };
 
 /* ---------- Render general ---------- */
@@ -36,6 +37,7 @@ export function render() {
   let body = '';
   if (ui.seg === 'entrenar') body = s.active ? renderActive() : renderIdle();
   else if (ui.seg === 'rutinas') body = renderRutinas();
+  else if (ui.seg === 'progreso') body = renderProgreso();
   else if (ui.seg === 'cuerpo') body = renderCuerpo();
   else body = renderCalc();
   root().innerHTML = '<div class="title-row"><h1>Gym</h1></div>' + seg + body;
@@ -97,7 +99,8 @@ function renderIdle() {
     }).join('')
     : '<div class="empty">Todavía no has registrado entrenos.</div>';
 
-  return '<div class="card"><h3>Esta semana</h3><div class="tiles">' +
+  return goalCard() +
+    '<div class="card"><h3>Esta semana</h3><div class="tiles">' +
     '<div class="tile"><b>' + st.count + '</b><span>Entrenos</span></div>' +
     '<div class="tile"><b>' + fmt(st.volume / 1000, 1) + ' t</b><span>Volumen</span></div>' +
     '<div class="tile"><b>' + (st.minutes ? fmtMinutes(st.minutes) : '0 min') + '</b><span>Tiempo</span></div></div></div>' +
@@ -404,6 +407,202 @@ function exerciseInfo(exId) {
     html: '<p class="hint">' + esc(ex ? ex.group : 'Ejercicio eliminado') + '</p>' + stats +
       (isCustomExercise(exId) ? '<button type="button" class="btn ghost block mt" data-action="gym:ex-edit" data-id="' + esc(exId) + '">' + icon('edit', 16) + ' Editar ejercicio</button>' : '')
   });
+}
+
+
+/* ---------- Objetivo semanal, calendario y progreso ---------- */
+
+function sessionsByDate() {
+  const map = {};
+  getState().sessions.forEach((x) => {
+    if (!map[x.date]) map[x.date] = { n: 0, vol: 0, list: [] };
+    map[x.date].n += 1;
+    map[x.date].vol += sessionVolume(x);
+    map[x.date].list.push(x);
+  });
+  return map;
+}
+
+function weekCounts() {
+  const counts = {};
+  getState().sessions.forEach((x) => {
+    const k = dateKey(mondayOf(parseKey(x.date)));
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return counts;
+}
+
+function weekStreak(goal) {
+  const counts = weekCounts();
+  let cursor = mondayOf(new Date());
+  let n = 0;
+  if ((counts[dateKey(cursor)] || 0) >= goal) n += 1;
+  cursor = addDays(cursor, -7);
+  while ((counts[dateKey(cursor)] || 0) >= goal) { n += 1; cursor = addDays(cursor, -7); }
+  return n;
+}
+
+function goalCard() {
+  const s = getState();
+  const goal = s.weeklyGoal;
+  const monday = mondayOf(new Date());
+  const map = sessionsByDate();
+  const today = todayKey();
+  let count = 0;
+  const dots = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(monday, i);
+    const k = dateKey(d);
+    const trained = !!map[k];
+    if (trained) count += map[k].n;
+    dots.push('<div class="wk' + (trained ? ' on' : '') + (k === today ? ' today' : '') + '"><i>' + (trained ? icon('check', 12) : '') + '</i><span>' + WEEKDAY_LETTERS[d.getDay()] + '</span></div>');
+  }
+  const pct = Math.min(100, Math.round((count / goal) * 100));
+  const streak = weekStreak(goal);
+  return '<div class="card goal-card tappable" data-action="gym:goal-set" role="button" tabindex="0" aria-label="Cambiar objetivo semanal">' +
+    '<div class="cring" style="--p:' + pct + '"><b>' + count + '<small>/' + goal + '</small></b></div>' +
+    '<div class="grow"><div class="gc-title">Objetivo semanal</div>' +
+    '<div class="gc-sub">' + (count >= goal ? '¡Objetivo cumplido!' : 'Te faltan ' + (goal - count) + (goal - count === 1 ? ' entreno' : ' entrenos')) + '</div>' +
+    '<div class="wk-strip">' + dots.join('') + '</div></div>' +
+    (streak ? '<div class="wk-streak">' + flame(26, streak >= 3 ? 'hot' : '') + '<b>' + streak + '</b><span>' + (streak === 1 ? 'semana' : 'semanas') + '</span></div>' : '') + '</div>';
+}
+
+function goalSheet() {
+  const cur = getState().weeklyGoal;
+  const chips = [1, 2, 3, 4, 5, 6, 7].map((n) =>
+    '<label class="chip"><input type="radio" name="goal" value="' + n + '"' + (n === cur ? ' checked' : '') + '><span>' + n + '</span></label>').join('');
+  openSheet({
+    title: 'Objetivo semanal',
+    html: '<div class="field"><label>Entrenos por semana</label><div class="chips">' + chips + '</div></div>' +
+      '<p class="hint">Si cumples el objetivo varias semanas seguidas, la llama de racha se va encendiendo.</p>',
+    onSave: (f) => {
+      const v = f.querySelector('input[name=goal]:checked');
+      if (v) getState().weeklyGoal = Number(v.value);
+      save();
+      render();
+    }
+  });
+}
+
+function calendarHtml() {
+  const { y, m, sel } = ui.cal;
+  const map = sessionsByDate();
+  const today = todayKey();
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const total = new Date(y, m + 1, 0).getDate();
+  let maxVol = 0;
+  let monthCount = 0;
+  let monthMin = 0;
+  for (let d = 1; d <= total; d++) {
+    const k = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    if (map[k]) { maxVol = Math.max(maxVol, map[k].vol); monthCount += map[k].n; map[k].list.forEach((x) => { monthMin += x.durationMin; }); }
+  }
+  let cells = '';
+  for (let i = 0; i < offset; i++) cells += '<span class="cal-blank"></span>';
+  for (let d = 1; d <= total; d++) {
+    const k = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const info = map[k];
+    const lvl = info ? (maxVol > 0 && info.vol / maxVol > 0.66 ? 3 : info.vol / maxVol > 0.33 ? 2 : 1) : 0;
+    cells += '<button type="button" class="cal-day' + (lvl ? ' l' + lvl : '') + (k === today ? ' today' : '') + (k === sel ? ' sel' : '') + '" data-action="gym:cal-day" data-date="' + k + '" style="animation-delay:' + (d * 8) + 'ms" aria-label="' + d + (info ? ', ' + info.n + ' entreno' + (info.n > 1 ? 's' : '') : '') + '">' + d + (info && info.n > 1 ? '<i>' + info.n + '</i>' : '') + '</button>';
+  }
+  const name = capitalize(new Date(y, m, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
+  const heads = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((x) => '<span>' + x + '</span>').join('');
+  return '<div class="card"><div class="month-nav"><button type="button" class="icon-btn" data-action="gym:cal-prev" aria-label="Mes anterior">' + icon('chevron', 18).replace('class="i"', 'class="i flip"') + '</button>' +
+    '<span class="name">' + esc(name) + '</span>' +
+    '<button type="button" class="icon-btn" data-action="gym:cal-next" aria-label="Mes siguiente">' + icon('chevron', 18) + '</button></div>' +
+    '<div class="cal-head">' + heads + '</div><div class="cal-grid">' + cells + '</div>' +
+    '<div class="cal-legend"><span><i class="l1"></i><i class="l2"></i><i class="l3"></i> Más volumen</span><b>' + monthCount + (monthCount === 1 ? ' entreno' : ' entrenos') + (monthMin ? ' · ' + fmtMinutes(monthMin) : '') + '</b></div></div>';
+}
+
+function daySheet(key) {
+  const info = sessionsByDate()[key];
+  const d = parseKey(key);
+  const title = capitalize(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
+  if (!info) {
+    const routines = getState().routines.filter((r) => r.days.indexOf(d.getDay()) >= 0);
+    openSheet({
+      title: title,
+      saveLabel: null,
+      cancelLabel: 'Cerrar',
+      html: '<div class="empty-state"><div class="big">😴</div><p>No hay entrenos este día' + (routines.length ? '. Tenías programado: ' + esc(routines.map((r) => r.name).join(', ')) : '') + '.</p></div>'
+    });
+    return;
+  }
+  openSheet({
+    title: title,
+    saveLabel: null,
+    cancelLabel: 'Cerrar',
+    html: info.list.map((x) =>
+      '<div class="row tappable" data-action="gym:session" data-id="' + esc(x.id) + '" role="button" tabindex="0"><div class="grow"><div class="txt">' + esc(x.name) + '</div><div class="pill">' + x.entries.length + ' ejerc. · ' + sessionSets(x) + ' series · ' + fmt(sessionVolume(x), 0) + ' kg' + (x.durationMin ? ' · ' + fmtMinutes(x.durationMin) : '') + '</div></div>' +
+      (x.prs.length ? '<span class="pr-badge">' + icon('trophy', 16) + x.prs.length + '</span>' : '') + '<span class="chev">' + icon('chevron', 18) + '</span></div>').join('')
+  });
+}
+
+function volumeBars() {
+  const monday = mondayOf(new Date());
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const start = addDays(monday, -7 * i);
+    const from = dateKey(start);
+    const to = dateKey(addDays(start, 6));
+    const list = getState().sessions.filter((x) => x.date >= from && x.date <= to);
+    weeks.push({ start: start, vol: list.reduce((n, x) => n + sessionVolume(x), 0), n: list.length, cur: i === 0 });
+  }
+  const max = Math.max.apply(null, weeks.map((w) => w.vol).concat([1]));
+  return '<div class="vbars">' + weeks.map((w) =>
+    '<div class="vbar' + (w.cur ? ' cur' : '') + '"><b>' + (w.vol ? fmt(w.vol / 1000, 1) : '') + '</b><div class="vtrack"><span style="height:' + (w.vol ? Math.max(6, Math.round((w.vol / max) * 100)) : 0) + '%"></span></div><em>' + w.start.getDate() + '/' + (w.start.getMonth() + 1) + '</em></div>').join('') + '</div>';
+}
+
+function muscleBars() {
+  const from = dateKey(addDays(new Date(), -29));
+  const by = {};
+  let total = 0;
+  getState().sessions.filter((x) => x.date >= from).forEach((x) => {
+    x.entries.forEach((e) => {
+      const ex = findExercise(e.exId);
+      const g = ex ? ex.group : 'Otros';
+      by[g] = (by[g] || 0) + e.sets.length;
+      total += e.sets.length;
+    });
+  });
+  if (!total) return '<div class="empty">Registra entrenos para ver qué músculos trabajas más.</div>';
+  const rows = Object.keys(by).sort((a, b) => by[b] - by[a]);
+  const max = by[rows[0]];
+  return rows.map((g) =>
+    '<div class="cat-row"><span>' + esc(g) + '</span><div class="cat-bar"><span style="width:' + Math.round((by[g] / max) * 100) + '%"></span></div><span class="cat-amt">' + by[g] + ' series</span></div>').join('');
+}
+
+function recordsList() {
+  const best = {};
+  getState().sessions.forEach((x) => {
+    x.entries.forEach((e) => {
+      const b = bestSet(e.sets);
+      if (!b) return;
+      const sc = setScore(b);
+      if (!best[e.exId] || sc > best[e.exId].score + 0.001) best[e.exId] = { exId: e.exId, name: e.name, set: b, score: sc, date: x.date };
+    });
+  });
+  const list = Object.keys(best).map((k) => best[k]).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 8);
+  if (!list.length) return '<div class="empty">Tus récords aparecerán aquí.</div>';
+  return list.map((r) =>
+    '<div class="row tappable" data-action="gym:ex-info" data-id="' + esc(r.exId) + '" role="button" tabindex="0"><div class="pr-icon">' + icon('trophy', 18) + '</div>' +
+    '<div class="grow"><div class="txt">' + esc(exerciseName(r.exId, r.name)) + '</div><div class="pill">' + (r.set.kg ? fmt(r.set.kg, 2) + ' kg × ' : '') + r.set.reps + ' · ' + esc(shortDate(r.date)) + '</div></div>' +
+    '<b class="rec-val">' + (r.set.kg ? fmt(r.score, 0) + ' kg' : r.set.reps + ' reps') + '</b></div>').join('');
+}
+
+function renderProgreso() {
+  const s = getState();
+  const now = new Date();
+  const monthPrefix = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const totalVol = s.sessions.reduce((n, x) => n + sessionVolume(x), 0);
+  return '<div class="tiles"><div class="tile card-t"><b>' + s.sessions.length + '</b><span>Entrenos totales</span></div>' +
+    '<div class="tile card-t"><b>' + s.sessions.filter((x) => x.date.slice(0, 7) === monthPrefix).length + '</b><span>Este mes</span></div>' +
+    '<div class="tile card-t"><b>' + fmt(totalVol / 1000, 1) + ' t</b><span>Volumen total</span></div></div>' +
+    calendarHtml() +
+    '<div class="card"><h3>Volumen semanal (toneladas)</h3>' + volumeBars() + '</div>' +
+    '<div class="card"><h3>Músculos · últimos 30 días</h3>' + muscleBars() + '</div>' +
+    '<div class="card"><h3>Récords recientes</h3>' + recordsList() + '</div>';
 }
 
 /* ---------- Rutinas ---------- */
@@ -802,6 +1001,10 @@ export const actions = {
   'gym:weight-new': () => weightSheet(null),
   'gym:weight-edit': (el) => { const w = findById(getState().weights, el.getAttribute('data-id')); if (w) weightSheet(w); },
   'gym:profile': () => profileSheet(),
+  'gym:goal-set': () => goalSheet(),
+  'gym:cal-prev': () => { const d = new Date(ui.cal.y, ui.cal.m - 1, 1); ui.cal.y = d.getFullYear(); ui.cal.m = d.getMonth(); render(); },
+  'gym:cal-next': () => { const d = new Date(ui.cal.y, ui.cal.m + 1, 1); ui.cal.y = d.getFullYear(); ui.cal.m = d.getMonth(); render(); },
+  'gym:cal-day': (el) => { ui.cal.sel = el.getAttribute('data-date'); render(); daySheet(ui.cal.sel); },
   'gym:goal': (el) => { getState().profile.goal = el.getAttribute('data-v'); save(); render(); }
 };
 

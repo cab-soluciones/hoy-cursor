@@ -4,17 +4,18 @@ import * as gym from './gym.js';
 import * as gastos from './gastos.js';
 import * as notas from './notas.js';
 import * as ajustes from './ajustes.js';
+import * as actividad from './actividad.js';
 
-const TABS = ['hoy', 'gym', 'gastos', 'notas', 'ajustes'];
+const TABS = ['hoy', 'gym', 'actividad', 'gastos', 'notas', 'ajustes'];
 const views = {};
 TABS.forEach((t) => { views[t] = document.getElementById('view-' + t); });
 
-const modules = { hoy: hoy, gym: gym, gastos: gastos, notas: notas, ajustes: ajustes };
+const modules = { hoy: hoy, gym: gym, actividad: actividad, gastos: gastos, notas: notas, ajustes: ajustes };
 Object.keys(modules).forEach((k) => registerView(k, () => {
-  if (current === k || k === 'hoy' || k === 'gym') modules[k].render();
+  if (current === k || k === 'hoy' || k === 'gym' || k === 'actividad') modules[k].render();
 }));
 
-const actions = Object.assign({}, hoy.actions, gym.actions, gastos.actions, notas.actions, ajustes.actions, {
+const actions = Object.assign({}, hoy.actions, gym.actions, actividad.actions, gastos.actions, notas.actions, ajustes.actions, {
   'app:go': (el) => showTab(el.getAttribute('data-tab'))
 });
 const forms = Object.assign({}, hoy.forms, ajustes.forms);
@@ -44,6 +45,8 @@ setNavigator(showTab);
 mountTabIcons();
 initSheet();
 gym.init();
+hoy.init();
+actividad.init();
 ajustes.init();
 
 document.getElementById('tabbar').addEventListener('click', (e) => {

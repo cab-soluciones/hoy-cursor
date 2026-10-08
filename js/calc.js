@@ -136,3 +136,57 @@ export function habitStreak(habit, isDone, isScheduled, now) {
   }
   return n;
 }
+
+/* ---------- Horario y caminatas ---------- */
+
+export function toMin(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+
+export function fmtClock(min) {
+  const t = ((Math.round(min) % 1440) + 1440) % 1440;
+  return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
+}
+
+function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+export function stepsPerKm(heightCm) {
+  const h = heightCm > 0 ? heightCm : 175;
+  return Math.round(1000 / ((0.415 * h) / 100));
+}
+
+export function walkKcal(km, weightKg, speed) {
+  const w = weightKg > 0 ? weightKg : 75;
+  return 3.5 * w * (km / (speed > 0 ? speed : 5));
+}
+
+export function legMinutes(km, speed) {
+  return Math.max(1, Math.round((km / (speed > 0 ? speed : 5)) * 60));
+}
+
+export function dayPlan(schedule, date, skipped, speed) {
+  const dow = date.getDay();
+  const blocks = [];
+  const legs = [];
+  schedule.forEach((b) => {
+    if (b.days.indexOf(dow) < 0) return;
+    const skip = skipped(b);
+    const start = toMin(b.start);
+    const end = toMin(b.end);
+    blocks.push({ id: b.id, name: b.name, emoji: b.emoji, kind: b.kind, startMin: start, endMin: end, skipped: skip, km: b.km });
+    if (skip || !(b.km > 0)) return;
+    const dur = legMinutes(b.km, speed);
+    if (b.walkTo) legs.push({ blockId: b.id, name: b.name, emoji: b.emoji, dir: 'to', startMin: start - dur, endMin: start, km: b.km });
+    if (b.walkBack) legs.push({ blockId: b.id, name: b.name, emoji: b.emoji, dir: 'back', startMin: end, endMin: end + dur, km: b.km });
+  });
+  blocks.sort((a, b) => a.startMin - b.startMin);
+  legs.sort((a, b) => a.startMin - b.startMin);
+  return { blocks: blocks, legs: legs };
+}
+
+export function legFraction(leg, nowMin) {
+  if (nowMin == null) return 0;
+  if (nowMin >= 99999) return 1;
+  return clamp((nowMin - leg.startMin) / (leg.endMin - leg.startMin), 0, 1);
+}

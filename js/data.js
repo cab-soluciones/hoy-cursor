@@ -2,7 +2,7 @@ import { uid, isDateKey, slug } from './util.js';
 
 export const STORAGE_KEY = 'hoy.v1';
 export const AUTHOR = 'Javier Lorenzo';
-export const VERSION = '2.0';
+export const VERSION = '3.0';
 
 export const CATEGORIES = ['Comida', 'Compra', 'Transporte', 'Ocio', 'Casa', 'Salud', 'Otros'];
 export const WEEKDAY_LETTERS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
@@ -93,11 +93,25 @@ export const HABIT_PRESETS = [
   { emoji: '🥩', name: 'Llegar a mi proteína', target: 1, unit: '', weekdays: [], auto: '' },
   { emoji: '😴', name: 'Dormir 7-8 horas', target: 1, unit: '', weekdays: [], auto: '' },
   { emoji: '🌿', name: 'Tomar vitaminas', target: 1, unit: '', weekdays: [], auto: '' },
+  { emoji: '🚶', name: 'Llegar a mis pasos', target: 1, unit: '', weekdays: [], auto: 'steps' },
   { emoji: '🧘', name: 'Estirar / movilidad', target: 1, unit: '', weekdays: [], auto: '' },
   { emoji: '🍽️', name: 'Comidas del plan', target: 4, unit: 'comidas', weekdays: [], auto: '' }
 ];
 
-export const HABIT_PACK = ['Tomar creatina', 'Beber agua', 'Ir al gym', 'Llegar a mi proteína', 'Dormir 7-8 horas'];
+export const HABIT_PACK = ['Tomar creatina', 'Beber agua', 'Ir al gym', 'Llegar a mis pasos', 'Llegar a mi proteína', 'Dormir 7-8 horas'];
+
+export const BLOCK_KINDS = [
+  { value: 'work', label: 'Trabajo', emoji: '💼' },
+  { value: 'class', label: 'Curso / clase', emoji: '🎓' },
+  { value: 'other', label: 'Otro', emoji: '📍' }
+];
+
+export function defaultSchedule() {
+  return [
+    { id: 'b-work', name: 'Trabajo', emoji: '💼', kind: 'work', days: [1, 2, 3, 4, 5], start: '09:00', end: '14:00', km: 1.5, walkTo: true, walkBack: true },
+    { id: 'b-course', name: 'Curso', emoji: '🎓', kind: 'class', days: [1, 2, 3, 4], start: '16:00', end: '20:00', km: 1.5, walkTo: true, walkBack: true }
+  ];
+}
 
 /* ---------- Estado ---------- */
 
@@ -114,7 +128,12 @@ export function emptyState() {
     weights: [],
     profile: { height: null, age: null, sex: 'm', activity: 1.55, goal: 'maintain', weight: null },
     restSeconds: 90,
-    active: null
+    active: null,
+    weeklyGoal: 4,
+    schedule: defaultSchedule(),
+    walk: { speed: 5, goal: 10000, configured: false },
+    stepsLog: [],
+    skips: []
   };
 }
 
@@ -185,7 +204,7 @@ export function normalize(raw) {
       target: Math.round(num(h.target, 1, 99, 1)),
       unit: str(h.unit, 20),
       weekdays: intList(h.weekdays, 0, 6),
-      auto: h.auto === 'gym' ? 'gym' : '',
+      auto: h.auto === 'gym' || h.auto === 'steps' ? h.auto : '',
       days: (Array.isArray(h.days) ? h.days : []).filter(isDateKey),
       counts: counts
     });
@@ -278,6 +297,42 @@ export function normalize(raw) {
     };
   }
 
+  s.weeklyGoal = Math.round(num(raw.weeklyGoal, 1, 7, 4));
+
+  if (Array.isArray(raw.schedule)) {
+    s.schedule = raw.schedule
+      .filter((b) => b && typeof b === 'object' && str(b.name).trim() && /^\d{2}:\d{2}$/.test(str(b.start, 5)) && /^\d{2}:\d{2}$/.test(str(b.end, 5)))
+      .slice(0, 12)
+      .map((b) => ({
+        id: str(b.id, 40) || uid(),
+        name: str(b.name, 60).trim(),
+        emoji: str(b.emoji, 12) || '📍',
+        kind: BLOCK_KINDS.some((k) => k.value === b.kind) ? b.kind : 'other',
+        days: intList(b.days, 0, 6),
+        start: b.start,
+        end: b.end,
+        km: Math.round(num(b.km, 0, 100, 0) * 100) / 100,
+        walkTo: b.walkTo !== false,
+        walkBack: b.walkBack !== false
+      }));
+  }
+
+  if (raw.walk && typeof raw.walk === 'object') {
+    s.walk = {
+      speed: num(raw.walk.speed, 2, 8, 5),
+      goal: Math.round(num(raw.walk.goal, 1000, 50000, 10000)),
+      configured: !!raw.walk.configured
+    };
+  }
+
+  (Array.isArray(raw.stepsLog) ? raw.stepsLog : []).forEach((x) => {
+    if (!x || typeof x !== 'object' || !isDateKey(x.date)) return;
+    const steps = Math.round(Number(x.steps));
+    if (isFinite(steps) && steps >= 0 && steps <= 200000) s.stepsLog.push({ date: x.date, steps: steps });
+  });
+
+  s.skips = (Array.isArray(raw.skips) ? raw.skips : []).map((k) => str(k, 60)).filter((k) => /^\d{4}-\d{2}-\d{2}\|/.test(k)).slice(-400);
+
   return s;
 }
 
@@ -327,20 +382,6 @@ export function exerciseName(id, fallback) {
 
 export function isCustomExercise(id) {
   return store.state.exercises.some((e) => e.id === id);
-}
-
-export function isHabitDone(habit, key) {
-  if (habit.auto === 'gym') return store.state.sessions.some((s) => s.date === key);
-  return habit.days.indexOf(key) >= 0;
-}
-
-export function habitCount(habit, key) {
-  if (habit.target <= 1) return isHabitDone(habit, key) ? 1 : 0;
-  return habit.counts[key] || 0;
-}
-
-export function isScheduled(habit, date) {
-  return !habit.weekdays.length || habit.weekdays.length >= 7 || habit.weekdays.indexOf(date.getDay()) >= 0;
 }
 
 export function lastEntryFor(exId) {

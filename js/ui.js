@@ -34,12 +34,24 @@ const PATHS = {
   up: '<path d="M6 14l6-6 6 6"/>',
   down: '<path d="M6 10l6 6 6-6"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
-  zap: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'
+  zap: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+  walk: '<circle cx="13.5" cy="4.5" r="1.8"/><path d="M9.5 21l2.2-6.200M11.700 14.800l2.300 2v4.200M11.700 14.800L11 9.500l4 1.300 2 3.200M11 9.500L8 11.500"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M8.500 3v4M15.500 3v4"/>',
+  pin: '<path d="M12 21s6-5.500 6-10.500a6 6 0 0 0-12 0C6 15.500 12 21 12 21z"/><circle cx="12" cy="10.500" r="2"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/>',
+  repeat: '<path d="M4 12a8 8 0 0 1 13.500-5.800L20 8.500M20 4v4.500h-4.500M20 12a8 8 0 0 1-13.500 5.800L4 15.500M4 20v-4.500h4.500"/>'
 };
 
 export function icon(name, size) {
   const s = size || 22;
   return '<svg class="i" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (PATHS[name] || '') + '</svg>';
+}
+
+export function flame(size, cls) {
+  const px = size || 18;
+  return '<span class="flame' + (cls ? ' ' + cls : '') + '" style="width:' + px + 'px;height:' + px + 'px" aria-hidden="true">' +
+    '<svg viewBox="0 0 24 24" width="' + px + '" height="' + px + '"><path class="out" d="M12 2.5c.8 3.2 5.5 5.5 5.5 11a5.5 5.5 0 0 1-11 0c0-2.2 1-3.8 2.2-5 .2 1.8 1 2.8 2 3.2C10.300 8 10.800 5 12 2.5z" fill="url(#flameOut)"/>' +
+    '<path class="in" d="M12 12.500c.4 1.400 2.300 2.300 2.300 4.200a2.300 2.300 0 0 1-4.600 0c0-1 .5-1.600 1-2.100.1.700.5 1.100.9 1.200-.2-1 .1-2.300.4-3.300z" fill="url(#flameIn)"/></svg></span>';
 }
 
 export function mountTabIcons() {
@@ -108,7 +120,7 @@ export function confetti() {
   const h = (canvas.height = window.innerHeight);
   document.body.appendChild(canvas);
   const ctx = canvas.getContext('2d');
-  const colors = ['#6c5ce7', '#00b8d9', '#a29bfe', '#55efc4', '#ffeaa7', '#ff7675'];
+  const colors = ['#5fd8ff', '#14a9eb', '#aee9ff', '#ffffff', '#0b79b0', '#7be3ff'];
   const parts = [];
   for (let i = 0; i < 90; i++) {
     parts.push({
@@ -173,8 +185,8 @@ export function lineChart(points, opts) {
   const lastDot = '<circle cx="' + px(last.x).toFixed(1) + '" cy="' + py(last.y).toFixed(1) + '" r="5" class="cdot-last"/>';
   const label = (p, anchor) => '<text x="' + (anchor === 'end' ? W - R : L) + '" y="' + (H - 8) + '" text-anchor="' + anchor + '" class="clabel">' + esc(shortDate(toKey(p.x))) + '</text>';
   return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(o.label || 'Gráfica') + '">' +
-    '<defs><linearGradient id="' + id + 'l" x1="0" x2="1"><stop offset="0" stop-color="#6c5ce7"/><stop offset="1" stop-color="#00b8d9"/></linearGradient>' +
-    '<linearGradient id="' + id + 'a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6c5ce7" stop-opacity=".28"/><stop offset="1" stop-color="#00b8d9" stop-opacity="0"/></linearGradient></defs>' +
+    '<defs><linearGradient id="' + id + 'l" x1="0" x2="1"><stop offset="0" stop-color="#14a9eb"/><stop offset="1" stop-color="#7be3ff"/></linearGradient>' +
+    '<linearGradient id="' + id + 'a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38c7ff" stop-opacity=".32"/><stop offset="1" stop-color="#38c7ff" stop-opacity="0"/></linearGradient></defs>' +
     '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + (H - B) + '" y2="' + (H - B) + '" class="caxis"/>' +
     line + dots + lastDot +
     '<text x="' + (W - R) + '" y="' + (T - 3) + '" text-anchor="end" class="clabel strong">' + esc(fmt(last.y, dec) + unit) + '</text>' +
